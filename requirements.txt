@@ -1,0 +1,6 @@
+flask
+flask-cors
+requests
+pypdf
+openai>=1.0.0
+gunicorn
