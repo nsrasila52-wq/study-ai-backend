@@ -11,7 +11,6 @@ from urllib.parse import urlparse, parse_qs
 app = Flask(__name__)
 CORS(app)
 
-# OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/", methods=["GET"])
@@ -24,13 +23,11 @@ def analyze():
     if not data:
         return jsonify({"error": "No data received"}), 400
 
-    # -------------------------
-    # YouTube case
-    # -------------------------
+    # --------- YouTube case ----------
     if data.get("yt_url"):
         yt_url = data["yt_url"]
         try:
-            # Extract video ID
+            # extract video_id
             parsed_url = urlparse(yt_url)
             if parsed_url.hostname in ["www.youtube.com", "youtube.com"]:
                 video_id = parse_qs(parsed_url.query).get("v")
@@ -42,18 +39,18 @@ def analyze():
             else:
                 return jsonify({"error": "Invalid YouTube URL"}), 400
 
-            # Fetch transcript using latest method
+            # ----------- NEW WAY ------------
             try:
                 transcript_obj = YouTubeTranscriptApi.list_transcripts(video_id)
-                transcript = transcript_obj.find_transcript(['en']).fetch()
-                transcript_text = " ".join([t['text'] for t in transcript])
+                transcript_text = transcript_obj.find_transcript(['en']).fetch()
+                transcript_text = " ".join([t["text"] for t in transcript_text])
             except (TranscriptsDisabled, NoTranscriptFound):
                 return jsonify({"error": "Transcript not available for this video"}), 400
 
             if not transcript_text.strip():
                 return jsonify({"error": "Transcript is empty"}), 400
 
-            # OpenAI prompt
+            # Prepare prompt for OpenAI
             prompt = f"""
 You are a strict study decision AI.
 
@@ -75,9 +72,7 @@ SYLLABUS:
         except Exception as e:
             return jsonify({"error": f"Failed to process YouTube link: {str(e)}"}), 500
 
-    # -------------------------
-    # PDF case
-    # -------------------------
+    # --------- PDF case ----------
     if data.get("file_url"):
         try:
             file_url = data["file_url"]
@@ -117,6 +112,7 @@ SYLLABUS:
             return jsonify({"error": f"Failed to process PDF: {str(e)}"}), 500
 
     return jsonify({"error": "No valid input"}), 400
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
