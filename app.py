@@ -11,6 +11,7 @@ from urllib.parse import urlparse, parse_qs
 app = Flask(__name__)
 CORS(app)
 
+# OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/", methods=["GET"])
@@ -23,10 +24,13 @@ def analyze():
     if not data:
         return jsonify({"error": "No data received"}), 400
 
+    # -------------------------
     # YouTube case
+    # -------------------------
     if data.get("yt_url"):
         yt_url = data["yt_url"]
         try:
+            # Extract video ID
             parsed_url = urlparse(yt_url)
             if parsed_url.hostname in ["www.youtube.com", "youtube.com"]:
                 video_id = parse_qs(parsed_url.query).get("v")
@@ -38,6 +42,7 @@ def analyze():
             else:
                 return jsonify({"error": "Invalid YouTube URL"}), 400
 
+            # Get transcript
             try:
                 transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
                 transcript_text = " ".join([t["text"] for t in transcript_list])
@@ -47,6 +52,7 @@ def analyze():
             if not transcript_text.strip():
                 return jsonify({"error": "Transcript is empty"}), 400
 
+            # OpenAI prompt
             prompt = f"""
 You are a strict study decision AI.
 
@@ -58,6 +64,7 @@ From the syllabus below (YouTube transcript):
 SYLLABUS:
 {transcript_text[:12000]}
 """
+
             ai_response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}]
@@ -68,7 +75,9 @@ SYLLABUS:
         except Exception as e:
             return jsonify({"error": f"Failed to process YouTube link: {str(e)}"}), 500
 
+    # -------------------------
     # PDF case
+    # -------------------------
     if data.get("file_url"):
         try:
             file_url = data["file_url"]
@@ -83,7 +92,6 @@ SYLLABUS:
 
             reader = PdfReader(io.BytesIO(pdf_bytes))
             text = "".join([page.extract_text() or "" for page in reader.pages])
-
             if not text.strip():
                 return jsonify({"error": "No readable text found in PDF."}), 400
 
@@ -98,6 +106,7 @@ From the syllabus below:
 SYLLABUS:
 {text[:12000]}
 """
+
             ai_response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}]
@@ -109,6 +118,7 @@ SYLLABUS:
             return jsonify({"error": f"Failed to process PDF: {str(e)}"}), 500
 
     return jsonify({"error": "No valid input"}), 400
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
