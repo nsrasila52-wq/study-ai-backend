@@ -26,7 +26,7 @@ def analyze():
         return jsonify({"error": "No data received"}), 400
 
     # -------------------------
-    # YouTube URL case
+    # YouTube URL
     # -------------------------
     if data.get("yt_url"):
         yt_url = data["yt_url"]
@@ -57,7 +57,7 @@ def analyze():
             prompt = f"""
 You are a strict study decision AI.
 
-From the syllabus below (YouTube video transcript):
+From the syllabus below (YouTube transcript):
 1. Pick max 3 topics to study TODAY
 2. Say what to IGNORE today
 3. Be short and direct
@@ -77,7 +77,7 @@ SYLLABUS:
             return jsonify({"error": f"Failed to process YouTube link: {str(e)}"}), 500
 
     # -------------------------
-    # PDF file case
+    # PDF URL
     # -------------------------
     if data.get("file_url"):
         try:
@@ -87,12 +87,10 @@ SYLLABUS:
             response = requests.get(file_url, stream=True, timeout=15)
             content_type = response.headers.get("Content-Type", "")
 
-            # Allow only PDFs
             if "pdf" not in content_type.lower():
                 return jsonify({"error": "Only PDF files are supported right now."}), 400
 
             pdf_bytes = response.content
-
             if len(pdf_bytes) < 1000:
                 return jsonify({"error": "PDF file is corrupted or empty."}), 400
 
@@ -106,7 +104,7 @@ SYLLABUS:
             if not text.strip():
                 return jsonify({"error": "No readable text found in this PDF."}), 400
 
-            # OpenAI prompt
+            # Prepare AI prompt
             prompt = f"""
 You are a strict study decision AI.
 
@@ -130,7 +128,6 @@ SYLLABUS:
             return jsonify({"error": f"Failed to process PDF: {str(e)}"}), 500
 
     return jsonify({"error": "No valid input"}), 400
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
