@@ -42,10 +42,11 @@ def analyze():
             else:
                 return jsonify({"error": "Invalid YouTube URL"}), 400
 
-            # Get transcript
+            # Fetch transcript using latest method
             try:
-                transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-                transcript_text = " ".join([t["text"] for t in transcript_list])
+                transcript_obj = YouTubeTranscriptApi.list_transcripts(video_id)
+                transcript = transcript_obj.find_transcript(['en']).fetch()
+                transcript_text = " ".join([t['text'] for t in transcript])
             except (TranscriptsDisabled, NoTranscriptFound):
                 return jsonify({"error": "Transcript not available for this video"}), 400
 
@@ -64,7 +65,6 @@ From the syllabus below (YouTube transcript):
 SYLLABUS:
 {transcript_text[:12000]}
 """
-
             ai_response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}]
@@ -106,7 +106,6 @@ From the syllabus below:
 SYLLABUS:
 {text[:12000]}
 """
-
             ai_response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}]
@@ -118,7 +117,6 @@ SYLLABUS:
             return jsonify({"error": f"Failed to process PDF: {str(e)}"}), 500
 
     return jsonify({"error": "No valid input"}), 400
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
