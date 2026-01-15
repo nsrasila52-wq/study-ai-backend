@@ -11,7 +11,6 @@ from urllib.parse import urlparse, parse_qs
 app = Flask(__name__)
 CORS(app)
 
-# OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/", methods=["GET"])
@@ -21,17 +20,13 @@ def home():
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
-
     if not data:
         return jsonify({"error": "No data received"}), 400
 
-    # -------------------------
-    # YouTube URL
-    # -------------------------
+    # YouTube case
     if data.get("yt_url"):
         yt_url = data["yt_url"]
         try:
-            # Extract video ID
             parsed_url = urlparse(yt_url)
             if parsed_url.hostname in ["www.youtube.com", "youtube.com"]:
                 video_id = parse_qs(parsed_url.query).get("v")
@@ -43,7 +38,6 @@ def analyze():
             else:
                 return jsonify({"error": "Invalid YouTube URL"}), 400
 
-            # Get transcript
             try:
                 transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
                 transcript_text = " ".join([t["text"] for t in transcript_list])
@@ -53,7 +47,6 @@ def analyze():
             if not transcript_text.strip():
                 return jsonify({"error": "Transcript is empty"}), 400
 
-            # Prepare AI prompt
             prompt = f"""
 You are a strict study decision AI.
 
@@ -65,7 +58,6 @@ From the syllabus below (YouTube transcript):
 SYLLABUS:
 {transcript_text[:12000]}
 """
-
             ai_response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}]
@@ -76,35 +68,25 @@ SYLLABUS:
         except Exception as e:
             return jsonify({"error": f"Failed to process YouTube link: {str(e)}"}), 500
 
-    # -------------------------
-    # PDF URL
-    # -------------------------
+    # PDF case
     if data.get("file_url"):
         try:
             file_url = data["file_url"]
-
-            # Download file safely
-            response = requests.get(file_url, stream=True, timeout=15)
+            response = requests.get(file_url, timeout=15)
             content_type = response.headers.get("Content-Type", "")
-
             if "pdf" not in content_type.lower():
-                return jsonify({"error": "Only PDF files are supported right now."}), 400
+                return jsonify({"error": "Only PDF files are supported."}), 400
 
             pdf_bytes = response.content
             if len(pdf_bytes) < 1000:
-                return jsonify({"error": "PDF file is corrupted or empty."}), 400
+                return jsonify({"error": "PDF file is empty or corrupted."}), 400
 
             reader = PdfReader(io.BytesIO(pdf_bytes))
-            text = ""
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
+            text = "".join([page.extract_text() or "" for page in reader.pages])
 
             if not text.strip():
-                return jsonify({"error": "No readable text found in this PDF."}), 400
+                return jsonify({"error": "No readable text found in PDF."}), 400
 
-            # Prepare AI prompt
             prompt = f"""
 You are a strict study decision AI.
 
@@ -116,7 +98,6 @@ From the syllabus below:
 SYLLABUS:
 {text[:12000]}
 """
-
             ai_response = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}]
