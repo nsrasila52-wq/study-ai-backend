@@ -39,11 +39,10 @@ def analyze():
             else:
                 return jsonify({"error": "Invalid YouTube URL"}), 400
 
-            # ----------- NEW WAY ------------
+            # ----------- FIXED WAY TO GET TRANSCRIPT ------------
             try:
-                transcript_obj = YouTubeTranscriptApi.list_transcripts(video_id)
-                transcript_text = transcript_obj.find_transcript(['en']).fetch()
-                transcript_text = " ".join([t["text"] for t in transcript_text])
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+                transcript_text = " ".join([t["text"] for t in transcript_list])
             except (TranscriptsDisabled, NoTranscriptFound):
                 return jsonify({"error": "Transcript not available for this video"}), 400
 
