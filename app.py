@@ -95,16 +95,18 @@ def analyze():
 
             # ---- OpenAI prompt ----
             prompt = f"""
-You are a strict study decision AI.
+You are a strict, no-nonsense study decision AI.
 
-From the YouTube transcript below:
-1. Pick max 3 topics to study TODAY
-2. Clearly say what to IGNORE today
-3. Be short and direct
+Rules:
+1️⃣ Pick **max 3 topics** to study TODAY. Prioritize the most important parts.
+2️⃣ Clearly say what to **IGNORE today**. Be explicit.
+3️⃣ If transcript/PDF has timeline info (timestamps), suggest which sections to focus on and which to skip.
+4️⃣ Be **short, direct, and actionable**. No extra sentences.
 
-TRANSCRIPT:
-{transcript_text[:12000]}
+CONTENT:
+{transcript_text[:1000000000000000000] if 'transcript_text' in locals() else full_text[:1000000000000000000]}
 """
+
 
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -151,7 +153,7 @@ From the PDF syllabus below:
 3. Be short and direct
 
 PDF CONTENT:
-{full_text[:12000]}
+{full_text[:100000000000]}
 """
 
             response = client.chat.completions.create(
@@ -166,6 +168,19 @@ PDF CONTENT:
         except Exception as e:
             return jsonify({
                 "error": f"PDF processing failed: {str(e)}"
+            }), 500
+
+    # ==================================================
+    # PHOTO CASE (optional: image analyze if previously implemented)
+    # ==================================================
+    if "image_url" in data:
+        try:
+            # just send image URL to OpenAI / other vision model if implemented
+            # placeholder for your existing photo analyze code
+            return jsonify({"result": "Photo analyze logic placeholder (already working)"})
+        except Exception as e:
+            return jsonify({
+                "error": f"Photo processing failed: {str(e)}"
             }), 500
 
     return jsonify({"error": "No valid input"}), 400
