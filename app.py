@@ -60,16 +60,35 @@ def analyze():
             else:
                 return jsonify({"error": "Invalid YouTube URL"}), 400
 
-            # ---- fetch transcript (NO yt-dlp, NO whisper) ----
+            # ---- fetch transcript (ROBUST WAY) ----
             try:
-                transcript = YouTubeTranscriptApi.get_transcript(
-                    video_id,
-                    languages=["en"]
-                )
-            except (TranscriptsDisabled, NoTranscriptFound):
-                return jsonify({"error": "Transcript not available"}), 400
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
 
-            transcript_text = " ".join([t["text"] for t in transcript])
+                transcript = None
+
+                # language priority
+                for lang in ["en", "en-US", "en-IN", "hi"]:
+                    try:
+                        transcript = transcript_list.find_transcript([lang])
+                        break
+                    except:
+                        continue
+
+                # fallback → first available transcript
+                if transcript is None:
+                    transcript = transcript_list.find_transcript(
+                        [t.language_code for t in transcript_list]
+                    )
+
+                transcript_data = transcript.fetch()
+
+            except TranscriptsDisabled:
+                return jsonify({"error": "Transcript disabled on this video"}), 400
+
+            except NoTranscriptFound:
+                return jsonify({"error": "No transcript found for this video"}), 400
+
+            transcript_text = " ".join([t["text"] for t in transcript_data])
 
             if not transcript_text.strip():
                 return jsonify({"error": "Empty transcript"}), 400
