@@ -60,27 +60,24 @@ def analyze():
             else:
                 return jsonify({"error": "Invalid YouTube URL"}), 400
 
-            # ---- fetch transcript (ROBUST WAY) ----
+            # ---- fetch transcript (WORKING) ----
             try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                ytt_api = YouTubeTranscriptApi()
+                transcript_data = None
 
-                transcript = None
-
-                # language priority
+                # try multiple languages
                 for lang in ["en", "en-US", "en-IN", "hi"]:
                     try:
-                        transcript = transcript_list.find_transcript([lang])
+                        transcript_obj = ytt_api.fetch(video_id, languages=[lang])
+                        transcript_data = transcript_obj.to_raw_data()
                         break
                     except:
                         continue
 
-                # fallback → first available transcript
-                if transcript is None:
-                    transcript = transcript_list.find_transcript(
-                        [t.language_code for t in transcript_list]
-                    )
-
-                transcript_data = transcript.fetch()
+                # fallback: try default / any available
+                if transcript_data is None:
+                    transcript_obj = ytt_api.fetch(video_id)
+                    transcript_data = transcript_obj.to_raw_data()
 
             except TranscriptsDisabled:
                 return jsonify({"error": "Transcript disabled on this video"}), 400
@@ -93,7 +90,7 @@ def analyze():
             if not transcript_text.strip():
                 return jsonify({"error": "Empty transcript"}), 400
 
-            # ---- OpenAI prompt ----
+            # ---- Strong OpenAI prompt ----
             prompt = f"""
 You are a strict, no-nonsense study decision AI.
 
@@ -104,9 +101,8 @@ Rules:
 4️⃣ Be **short, direct, and actionable**. No extra sentences.
 
 CONTENT:
-{transcript_text[:1000000000000000000] if 'transcript_text' in locals() else full_text[:1000000000000000000]}
+{transcript_text[:12000]}
 """
-
 
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -153,7 +149,7 @@ From the PDF syllabus below:
 3. Be short and direct
 
 PDF CONTENT:
-{full_text[:100000000000]}
+{full_text[:12000]}
 """
 
             response = client.chat.completions.create(
@@ -171,12 +167,10 @@ PDF CONTENT:
             }), 500
 
     # ==================================================
-    # PHOTO CASE (optional: image analyze if previously implemented)
+    # PHOTO CASE (optional)
     # ==================================================
     if "image_url" in data:
         try:
-            # just send image URL to OpenAI / other vision model if implemented
-            # placeholder for your existing photo analyze code
             return jsonify({"result": "Photo analyze logic placeholder (already working)"})
         except Exception as e:
             return jsonify({
