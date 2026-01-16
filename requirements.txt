@@ -1,6 +1,7 @@
 flask
 flask-cors
 openai
-pypdf
 requests
+pypdf
 youtube-transcript-api
+yt-dlp
