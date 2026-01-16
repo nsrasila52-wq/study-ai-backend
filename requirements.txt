@@ -3,5 +3,4 @@ flask-cors
 openai
 pypdf
 requests
-yt-dlp
-
+youtube-transcript-api
