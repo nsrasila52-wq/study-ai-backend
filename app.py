@@ -7,9 +7,6 @@ import os
 from pypdf import PdfReader
 from openai import OpenAI
 
-# --------------------
-# App setup
-# --------------------
 app = Flask(__name__)
 CORS(app)
 
@@ -23,77 +20,93 @@ def home():
     return "Backend is live"
 
 # --------------------
-# Analyze endpoint
+# Analyze PDF / Photo
 # --------------------
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
-
     if not data:
         return jsonify({"error": "No data received"}), 400
 
-    # ==================================================
-    # PDF CASE
-    # ==================================================
+    content_text = ""
     if "file_url" in data:
         try:
-            file_url = data["file_url"]
-
-            r = requests.get(file_url, timeout=20)
+            r = requests.get(data["file_url"], timeout=20)
             if r.status_code != 200:
                 return jsonify({"error": "Failed to fetch PDF"}), 400
 
             reader = PdfReader(io.BytesIO(r.content))
-
-            full_text = ""
             for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    full_text += page_text + "\n"
+                text = page.extract_text()
+                if text:
+                    content_text += text + "\n"
 
-            if not full_text.strip():
-                return jsonify({"error": "No readable text in PDF"}), 400
+        except Exception as e:
+            return jsonify({"error": f"PDF processing failed: {str(e)}"}), 500
 
-            # Prompt without "today"
-            prompt = f"""
-You are a strict study decision AI.
+    elif "image_url" in data:
+        # placeholder for image analysis text extraction
+        content_text = "Extracted text from image placeholder"
+
+    if not content_text.strip():
+        return jsonify({"error": "No readable content"}), 400
+
+    prompt = f"""
+You are a strict study AI.
 
 Rules:
-1️⃣ Pick **max 3 topics** to study. Prioritize the most important parts.
-2️⃣ Clearly say what to **ignore**. Be explicit.
-3️⃣ Be **short, direct, and actionable**. No extra sentences.
+1️⃣ Pick max 3 topics to study from the content.
+2️⃣ Create 2-3 clear questions based on the content.
+3️⃣ Be short and direct.
 
-PDF CONTENT:
-{full_text[:12000]}
+CONTENT:
+{content_text[:12000]}
 """
 
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
 
-            return jsonify({
-                "result": response.choices[0].message.content
-            })
+    # AI response: topics + questions (assume plain text)
+    ai_text = response.choices[0].message.content
 
-        except Exception as e:
-            return jsonify({
-                "error": f"PDF processing failed: {str(e)}"
-            }), 500
+    # For simplicity, split questions manually if needed (frontend can parse)
+    return jsonify({
+        "result": ai_text
+    })
 
-    # ==================================================
-    # PHOTO CASE (optional)
-    # ==================================================
-    if "image_url" in data:
-        try:
-            return jsonify({"result": "Photo analyze logic placeholder (already working)"})
-        except Exception as e:
-            return jsonify({
-                "error": f"Photo processing failed: {str(e)}"
-            }), 500
+# --------------------
+# Check Answer endpoint
+# --------------------
+@app.route("/check_answer", methods=["POST"])
+def check_answer():
+    data = request.get_json()
+    if not data or "question" not in data or "answer" not in data:
+        return jsonify({"error": "Question and answer required"}), 400
 
-    return jsonify({"error": "No valid input"}), 400
+    question = data["question"]
+    answer = data["answer"]
 
+    prompt = f"""
+You are an expert teacher.
+
+Question: {question}
+Student's Answer: {answer}
+
+Rules:
+- Check if the student's answer is correct or incorrect.
+- Reply only in this format: "Correct" or "Incorrect: <short explanation>".
+- Be very brief.
+"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    result_text = response.choices[0].message.content
+    return jsonify({"feedback": result_text})
 
 # --------------------
 # Run
