@@ -101,7 +101,7 @@ Rules:
 4️⃣ Be **short, direct, and actionable**. No extra sentences.
 
 CONTENT:
-{transcript_text[:12000]}
+{transcript_text[:12000000000000000]}
 """
 
             response = client.chat.completions.create(
@@ -149,7 +149,7 @@ From the PDF syllabus below:
 3. Be short and direct
 
 PDF CONTENT:
-{full_text[:12000]}
+{full_text[:12000000000000000]}
 """
 
             response = client.chat.completions.create(
