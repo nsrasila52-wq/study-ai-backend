@@ -6,12 +6,6 @@ import os
 
 from pypdf import PdfReader
 from openai import OpenAI
-from youtube_transcript_api import (
-    YouTubeTranscriptApi,
-    TranscriptsDisabled,
-    NoTranscriptFound
-)
-from urllib.parse import urlparse, parse_qs
 
 # --------------------
 # App setup
@@ -39,86 +33,6 @@ def analyze():
         return jsonify({"error": "No data received"}), 400
 
     # ==================================================
-    # YOUTUBE CASE
-    # ==================================================
-    if "yt_url" in data:
-        yt_url = data["yt_url"]
-
-        try:
-            # ---- extract video id ----
-            parsed = urlparse(yt_url)
-
-            if parsed.hostname in ["www.youtube.com", "youtube.com"]:
-                video_id = parse_qs(parsed.query).get("v")
-                if not video_id:
-                    return jsonify({"error": "Invalid YouTube URL"}), 400
-                video_id = video_id[0]
-
-            elif parsed.hostname == "youtu.be":
-                video_id = parsed.path.replace("/", "")
-
-            else:
-                return jsonify({"error": "Invalid YouTube URL"}), 400
-
-            # ---- fetch transcript (WORKING) ----
-            try:
-                ytt_api = YouTubeTranscriptApi()
-                transcript_data = None
-
-                # try multiple languages
-                for lang in ["en", "en-US", "en-IN", "hi"]:
-                    try:
-                        transcript_obj = ytt_api.fetch(video_id, languages=[lang])
-                        transcript_data = transcript_obj.to_raw_data()
-                        break
-                    except:
-                        continue
-
-                # fallback: try default / any available
-                if transcript_data is None:
-                    transcript_obj = ytt_api.fetch(video_id)
-                    transcript_data = transcript_obj.to_raw_data()
-
-            except TranscriptsDisabled:
-                return jsonify({"error": "Transcript disabled on this video"}), 400
-
-            except NoTranscriptFound:
-                return jsonify({"error": "No transcript found for this video"}), 400
-
-            transcript_text = " ".join([t["text"] for t in transcript_data])
-
-            if not transcript_text.strip():
-                return jsonify({"error": "Empty transcript"}), 400
-
-            # ---- Strong OpenAI prompt ----
-            prompt = f"""
-You are a strict, no-nonsense study decision AI.
-
-Rules:
-1️⃣ Pick **max 3 topics** to study TODAY. Prioritize the most important parts.
-2️⃣ Clearly say what to **IGNORE today**. Be explicit.
-3️⃣ If transcript/PDF has timeline info (timestamps), suggest which sections to focus on and which to skip.
-4️⃣ Be **short, direct, and actionable**. No extra sentences.
-
-CONTENT:
-{transcript_text[:12000000000000000]}
-"""
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            return jsonify({
-                "result": response.choices[0].message.content
-            })
-
-        except Exception as e:
-            return jsonify({
-                "error": f"YouTube processing failed: {str(e)}"
-            }), 500
-
-    # ==================================================
     # PDF CASE
     # ==================================================
     if "file_url" in data:
@@ -140,16 +54,17 @@ CONTENT:
             if not full_text.strip():
                 return jsonify({"error": "No readable text in PDF"}), 400
 
+            # Prompt without "today"
             prompt = f"""
 You are a strict study decision AI.
 
-From the PDF syllabus below:
-1. Pick max 3 topics to study TODAY
-2. Say what to IGNORE today
-3. Be short and direct
+Rules:
+1️⃣ Pick **max 3 topics** to study. Prioritize the most important parts.
+2️⃣ Clearly say what to **ignore**. Be explicit.
+3️⃣ Be **short, direct, and actionable**. No extra sentences.
 
 PDF CONTENT:
-{full_text[:12000000000000000]}
+{full_text[:12000]}
 """
 
             response = client.chat.completions.create(
