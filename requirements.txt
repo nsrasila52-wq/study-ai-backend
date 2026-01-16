@@ -1,6 +1,7 @@
-fastapi
-uvicorn
+flask
+flask-cors
+requests
+pypdf
+openai
 youtube-transcript-api
 python-dotenv
-requests
-PyPDF2
