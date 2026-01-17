@@ -51,13 +51,15 @@ def analyze():
     if not content_text.strip():
         return jsonify({"error": "No readable content"}), 400
 
+    # -------------------- AI Prompt --------------------
     prompt = f"""
 You are a strict study AI.
 
 Rules:
-1️⃣ Pick max 3 topics to study from the content.
-2️⃣ Create 2-3 clear questions based on the content.
-3️⃣ Be short and direct.
+1️⃣ Pick max 3 topics to study from the content and clearly mark them as 'Important Topics'.
+2️⃣ Clearly mention what to ignore as 'Topics to Ignore'.
+3️⃣ Create 2-3 clear questions based on the content under 'Questions'.
+4️⃣ Be short, direct, and actionable.
 
 CONTENT:
 {content_text[:12000]}
@@ -68,12 +70,32 @@ CONTENT:
         messages=[{"role": "user", "content": prompt}]
     )
 
-    # AI response: topics + questions (assume plain text)
     ai_text = response.choices[0].message.content
 
-    # For simplicity, split questions manually if needed (frontend can parse)
+    # Simple parsing: split into sections
+    sections = {"important": "", "ignore": "", "questions": ""}
+    current = None
+    for line in ai_text.split("\n"):
+        line = line.strip()
+        if line.lower().startswith("important topics"):
+            current = "important"
+            continue
+        elif line.lower().startswith("topics to ignore"):
+            current = "ignore"
+            continue
+        elif line.lower().startswith("questions"):
+            current = "questions"
+            continue
+        elif line == "":
+            continue
+
+        if current:
+            sections[current] += line + "\n"
+
     return jsonify({
-        "result": ai_text
+        "important": sections["important"].strip(),
+        "ignore": sections["ignore"].strip(),
+        "questions": sections["questions"].strip()
     })
 
 # --------------------
