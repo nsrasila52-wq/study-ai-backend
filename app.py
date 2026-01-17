@@ -12,10 +12,16 @@ CORS(app)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# --------------------
+# Home
+# --------------------
 @app.route("/", methods=["GET"])
 def home():
     return "Backend is live"
 
+# --------------------
+# Analyze PDF
+# --------------------
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
@@ -29,8 +35,9 @@ def analyze():
             r = requests.get(data["file_url"], timeout=20)
             reader = PdfReader(io.BytesIO(r.content))
             for page in reader.pages:
-                if page.extract_text():
-                    content_text += page.extract_text() + "\n"
+                text = page.extract_text()
+                if text:
+                    content_text += text + "\n"
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -44,15 +51,16 @@ Return ONLY valid JSON in this exact format.
 Do not add extra text.
 
 {{
-  "important_topics": [max 3 items],
-  "ignore_topics": [2–3 items],
-  "questions": [2–5 questions]
+  "important_topics": ["topic1", "topic2", "topic3"],
+  "ignore_topics": ["topicA", "topicB"],
+  "questions": ["question1", "question2", "question3"]
 }}
 
 Rules:
 - important_topics and ignore_topics MUST NOT be empty
 - Be specific
-- No placeholders
+- No placeholders like **
+- Use plain text only
 
 CONTENT:
 {content_text[:12000]}
@@ -65,9 +73,9 @@ CONTENT:
     )
 
     try:
-        ai_json = response.choices[0].message.content
+        ai_json = response.choices[0].message.content.strip()
         parsed = json.loads(ai_json)
-    except:
+    except Exception:
         return jsonify({"error": "AI did not return valid JSON"}), 500
 
     return jsonify({
@@ -78,6 +86,49 @@ CONTENT:
         }
     })
 
+# --------------------
+# Check Answer (FIXED)
+# --------------------
+@app.route("/check_answer", methods=["POST"])
+def check_answer():
+    data = request.get_json()
+    if not data or "question" not in data or "answer" not in data:
+        return jsonify({"error": "Question and answer required"}), 400
+
+    question = data["question"]
+    answer = data["answer"]
+
+    prompt = f"""
+You are a strict examiner.
+
+Question:
+{question}
+
+Student Answer:
+{answer}
+
+Rules:
+- If correct → reply: Correct
+- If incorrect → reply: Incorrect: <short reason>
+- Be very brief
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+
+        feedback = response.choices[0].message.content.strip()
+        return jsonify({"feedback": feedback})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# --------------------
+# Run
+# --------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
