@@ -5,23 +5,17 @@ import io
 import os
 from pypdf import PdfReader
 from openai import OpenAI
-import json
+import re
 
 app = Flask(__name__)
 CORS(app)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# --------------------
-# Home
-# --------------------
 @app.route("/", methods=["GET"])
 def home():
     return "Backend is live"
 
-# --------------------
-# Analyze PDF / Photo
-# --------------------
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
@@ -45,54 +39,53 @@ def analyze():
             return jsonify({"error": f"PDF processing failed: {str(e)}"}), 500
 
     elif "image_url" in data:
-        # placeholder for image analysis text extraction
         content_text = "Extracted text from image placeholder"
 
     if not content_text.strip():
         return jsonify({"error": "No readable content"}), 400
 
-    # Prompt for AI to return JSON
+    # AI prompt
     prompt = f"""
 You are a strict study AI.
 
 Rules:
-1️⃣ Pick max 3 topics to study as "important_topics".
-2️⃣ Pick topics to ignore as "ignore_topics".
-3️⃣ Create 2-3 clear questions as "questions".
-4️⃣ Reply **only in JSON format** exactly like this:
-
-{{
-  "important_topics": ["topic1", "topic2", "topic3"],
-  "ignore_topics": ["topic4", "topic5"],
-  "questions": ["Question1?", "Question2?", "Question3?"]
-}}
+1️⃣ Pick max 3 topics to study from the content and mark them as 'Important Topics'.
+2️⃣ Clearly mention what to ignore as 'Topics to Ignore'.
+3️⃣ Create 2-3 clear questions from the content as 'Questions'.
+4️⃣ Be short and direct.
 
 CONTENT:
 {content_text[:12000]}
 """
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        ai_text = response.choices[0].message.content
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}]
+    )
 
-        # Try to parse AI response as JSON
-        try:
-            ai_json = json.loads(ai_text)
-        except:
-            return jsonify({"error": "AI did not return valid JSON"}), 500
+    ai_text = response.choices[0].message.content
 
-        return jsonify(ai_json)
+    # Simple parsing: split Important/Ignore topics and Questions
+    topics_match = re.findall(r"(Important Topics|Topics to Ignore):\s*(.*)", ai_text, re.IGNORECASE)
+    questions_match = re.findall(r"Questions:\s*(.*)", ai_text, re.IGNORECASE|re.DOTALL)
 
-    except Exception as e:
-        return jsonify({"error": f"AI request failed: {str(e)}"}), 500
+    topics_text = ""
+    for t in topics_match:
+        topics_text += f"{t[0]}: {t[1]}\n"
 
+    questions_list = []
+    if questions_match:
+        qs = questions_match[0]
+        # split numbered questions
+        questions_list = re.findall(r"\d+\.\s*(.*)", qs)
 
-# --------------------
-# Check Answer endpoint
-# --------------------
+    return jsonify({
+        "result": {
+            "topics": topics_text.strip(),
+            "questions": questions_list
+        }
+    })
+
 @app.route("/check_answer", methods=["POST"])
 def check_answer():
     data = request.get_json()
@@ -122,10 +115,6 @@ Rules:
     result_text = response.choices[0].message.content
     return jsonify({"feedback": result_text})
 
-
-# --------------------
-# Run
-# --------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
