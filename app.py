@@ -3,25 +3,19 @@ from flask_cors import CORS
 import requests
 import io
 import os
-
 from pypdf import PdfReader
 from openai import OpenAI
+import re
 
 app = Flask(__name__)
 CORS(app)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# --------------------
-# Home
-# --------------------
 @app.route("/", methods=["GET"])
 def home():
     return "Backend is live"
 
-# --------------------
-# Analyze PDF / Photo
-# --------------------
 @app.route("/analyze", methods=["POST"])
 def analyze():
     data = request.get_json()
@@ -50,15 +44,15 @@ def analyze():
     if not content_text.strip():
         return jsonify({"error": "No readable content"}), 400
 
-    # -------------------- AI Prompt --------------------
+    # AI prompt
     prompt = f"""
 You are a strict study AI.
 
 Rules:
-1️⃣ Pick max 3 topics to study from the content and clearly mark them as 'Important Topics'.
+1️⃣ Pick max 3 topics to study from the content and mark them as 'Important Topics'.
 2️⃣ Clearly mention what to ignore as 'Topics to Ignore'.
-3️⃣ Create 2-3 clear questions based on the content under 'Questions'.
-4️⃣ Be short, direct, and actionable.
+3️⃣ Create 2-3 clear questions from the content as 'Questions'.
+4️⃣ Be short and direct.
 
 CONTENT:
 {content_text[:12000]}
@@ -71,35 +65,27 @@ CONTENT:
 
     ai_text = response.choices[0].message.content
 
-    # -------------------- Parse AI response --------------------
-    sections = {"important": "", "ignore": "", "questions": ""}
-    current = None
-    for line in ai_text.split("\n"):
-        line = line.strip()
-        if line.lower().startswith("important topics"):
-            current = "important"
-            continue
-        elif line.lower().startswith("topics to ignore"):
-            current = "ignore"
-            continue
-        elif line.lower().startswith("questions"):
-            current = "questions"
-            continue
-        elif line == "":
-            continue
+    # Simple parsing: split Important/Ignore topics and Questions
+    topics_match = re.findall(r"(Important Topics|Topics to Ignore):\s*(.*)", ai_text, re.IGNORECASE)
+    questions_match = re.findall(r"Questions:\s*(.*)", ai_text, re.IGNORECASE|re.DOTALL)
 
-        if current:
-            sections[current] += line + "\n"
+    topics_text = ""
+    for t in topics_match:
+        topics_text += f"{t[0]}: {t[1]}\n"
+
+    questions_list = []
+    if questions_match:
+        qs = questions_match[0]
+        # split numbered questions
+        questions_list = re.findall(r"\d+\.\s*(.*)", qs)
 
     return jsonify({
-        "important": sections["important"].strip(),
-        "ignore": sections["ignore"].strip(),
-        "questions": sections["questions"].strip()
+        "result": {
+            "topics": topics_text.strip(),
+            "questions": questions_list
+        }
     })
 
-# --------------------
-# Check Answer endpoint
-# --------------------
 @app.route("/check_answer", methods=["POST"])
 def check_answer():
     data = request.get_json()
@@ -129,9 +115,6 @@ Rules:
     result_text = response.choices[0].message.content
     return jsonify({"feedback": result_text})
 
-# --------------------
-# Run
-# --------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
