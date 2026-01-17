@@ -49,10 +49,18 @@ def analyze():
 You are a strict study AI.
 
 Rules:
-1️⃣ Pick max 3 topics to study from the content and mark them as 'Important Topics'.
-2️⃣ Clearly mention what to ignore as 'Topics to Ignore'.
-3️⃣ Create 2-3 clear questions from the content as 'Questions'.
-4️⃣ Be short and direct.
+1️⃣ Pick max 3 topics to study from the content and list them under 'Important Topics'.
+2️⃣ Clearly mention 2-3 topics to ignore under 'Topics to Ignore'.
+3️⃣ Create 2-3 clear questions based on the content separately under 'Questions'.
+4️⃣ Provide output in JSON format only like this:
+
+{{
+  "topics": {{
+    "important": ["topic1", "topic2", "topic3"],
+    "ignore": ["ignore1", "ignore2"]
+  }},
+  "questions": ["question1", "question2", "question3"]
+}}
 
 CONTENT:
 {content_text[:12000]}
