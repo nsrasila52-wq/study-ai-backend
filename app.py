@@ -53,19 +53,18 @@ def analyze():
 
     # Prompt for AI to return JSON
     prompt = f"""
-You are a strict study AI. 
+You are a strict study AI.
 
-Instructions:
-1️⃣ Pick **max 3 important topics** from the content. Return them under 'important'.
-2️⃣ Identify topics that can be ignored. Return under 'ignore'.
-3️⃣ Create 2-3 clear questions from the content. Return under 'questions'.
-4️⃣ Return the output in **JSON ONLY**, like this:
+Rules:
+1️⃣ Pick max 3 topics to study as "important_topics".
+2️⃣ Pick topics to ignore as "ignore_topics".
+3️⃣ Create 2-3 clear questions as "questions".
+4️⃣ Reply **only in JSON format** exactly like this:
+
 {{
-  "topics": {{
-    "important": ["topic1", "topic2"],
-    "ignore": ["topic3"]
-  }},
-  "questions": ["question1", "question2", "question3"]
+  "important_topics": ["topic1", "topic2", "topic3"],
+  "ignore_topics": ["topic4", "topic5"],
+  "questions": ["Question1?", "Question2?", "Question3?"]
 }}
 
 CONTENT:
