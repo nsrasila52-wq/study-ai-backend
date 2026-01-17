@@ -24,43 +24,35 @@ def analyze():
 
     content_text = ""
 
-    # -------- PDF INPUT --------
     if "file_url" in data:
         try:
             r = requests.get(data["file_url"], timeout=20)
-            if r.status_code != 200:
-                return jsonify({"error": "Failed to fetch PDF"}), 400
-
             reader = PdfReader(io.BytesIO(r.content))
             for page in reader.pages:
-                text = page.extract_text()
-                if text:
-                    content_text += text + "\n"
-
+                if page.extract_text():
+                    content_text += page.extract_text() + "\n"
         except Exception as e:
-            return jsonify({"error": f"PDF processing failed: {str(e)}"}), 500
-
-    # -------- IMAGE PLACEHOLDER --------
-    elif "image_url" in data:
-        content_text = "Extracted text from image"
+            return jsonify({"error": str(e)}), 500
 
     if not content_text.strip():
         return jsonify({"error": "No readable content"}), 400
 
-    # -------- AI PROMPT (STRICT JSON) --------
     prompt = f"""
-You are a strict study decision AI.
+You are a strict study AI.
 
-ONLY return valid JSON.
-No markdown.
-No extra text.
+Return ONLY valid JSON in this exact format.
+Do not add extra text.
 
-JSON FORMAT:
 {{
-  "important_topics": ["topic1", "topic2", "topic3"],
-  "ignore_topics": ["topicA", "topicB"],
-  "questions": ["question1", "question2", "question3"]
+  "important_topics": [max 3 items],
+  "ignore_topics": [2–3 items],
+  "questions": [2–5 questions]
 }}
+
+Rules:
+- important_topics and ignore_topics MUST NOT be empty
+- Be specific
+- No placeholders
 
 CONTENT:
 {content_text[:12000]}
@@ -69,28 +61,22 @@ CONTENT:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0
+        temperature=0.2
     )
 
-    ai_text = response.choices[0].message.content.strip()
-
-    # -------- JSON PARSE SAFE --------
     try:
-        parsed = json.loads(ai_text)
-    except Exception:
-        return jsonify({
-            "error": "AI did not return valid JSON",
-            "raw_output": ai_text
-        }), 500
+        ai_json = response.choices[0].message.content
+        parsed = json.loads(ai_json)
+    except:
+        return jsonify({"error": "AI did not return valid JSON"}), 500
 
     return jsonify({
         "result": {
-            "important_topics": parsed.get("important_topics", []),
-            "ignore_topics": parsed.get("ignore_topics", []),
-            "questions": parsed.get("questions", [])
+            "important_topics": parsed["important_topics"],
+            "ignore_topics": parsed["ignore_topics"],
+            "questions": parsed["questions"]
         }
     })
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
