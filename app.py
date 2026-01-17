@@ -3,9 +3,9 @@ from flask_cors import CORS
 import requests
 import io
 import os
+import json
 from pypdf import PdfReader
 from openai import OpenAI
-import re
 
 app = Flask(__name__)
 CORS(app)
@@ -23,6 +23,8 @@ def analyze():
         return jsonify({"error": "No data received"}), 400
 
     content_text = ""
+
+    # -------- PDF INPUT --------
     if "file_url" in data:
         try:
             r = requests.get(data["file_url"], timeout=20)
@@ -38,21 +40,27 @@ def analyze():
         except Exception as e:
             return jsonify({"error": f"PDF processing failed: {str(e)}"}), 500
 
+    # -------- IMAGE PLACEHOLDER --------
     elif "image_url" in data:
-        content_text = "Extracted text from image placeholder"
+        content_text = "Extracted text from image"
 
     if not content_text.strip():
         return jsonify({"error": "No readable content"}), 400
 
-    # AI prompt
+    # -------- AI PROMPT (STRICT JSON) --------
     prompt = f"""
-You are a strict study AI.
+You are a strict study decision AI.
 
-Rules:
-1️⃣ Pick max 3 topics to study from the content and mark them as 'Important Topics'.
-2️⃣ Clearly mention what to ignore as 'Topics to Ignore'.
-3️⃣ Create 2-3 clear questions from the content as 'Questions'.
-4️⃣ Be short and direct.
+ONLY return valid JSON.
+No markdown.
+No extra text.
+
+JSON FORMAT:
+{{
+  "important_topics": ["topic1", "topic2", "topic3"],
+  "ignore_topics": ["topicA", "topicB"],
+  "questions": ["question1", "question2", "question3"]
+}}
 
 CONTENT:
 {content_text[:12000]}
@@ -60,60 +68,29 @@ CONTENT:
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
     )
 
-    ai_text = response.choices[0].message.content
+    ai_text = response.choices[0].message.content.strip()
 
-    # Simple parsing: split Important/Ignore topics and Questions
-    topics_match = re.findall(r"(Important Topics|Topics to Ignore):\s*(.*)", ai_text, re.IGNORECASE)
-    questions_match = re.findall(r"Questions:\s*(.*)", ai_text, re.IGNORECASE|re.DOTALL)
-
-    topics_text = ""
-    for t in topics_match:
-        topics_text += f"{t[0]}: {t[1]}\n"
-
-    questions_list = []
-    if questions_match:
-        qs = questions_match[0]
-        # split numbered questions
-        questions_list = re.findall(r"\d+\.\s*(.*)", qs)
+    # -------- JSON PARSE SAFE --------
+    try:
+        parsed = json.loads(ai_text)
+    except Exception:
+        return jsonify({
+            "error": "AI did not return valid JSON",
+            "raw_output": ai_text
+        }), 500
 
     return jsonify({
         "result": {
-            "topics": topics_text.strip(),
-            "questions": questions_list
+            "important_topics": parsed.get("important_topics", []),
+            "ignore_topics": parsed.get("ignore_topics", []),
+            "questions": parsed.get("questions", [])
         }
     })
 
-@app.route("/check_answer", methods=["POST"])
-def check_answer():
-    data = request.get_json()
-    if not data or "question" not in data or "answer" not in data:
-        return jsonify({"error": "Question and answer required"}), 400
-
-    question = data["question"]
-    answer = data["answer"]
-
-    prompt = f"""
-You are an expert teacher.
-
-Question: {question}
-Student's Answer: {answer}
-
-Rules:
-- Check if the student's answer is correct or incorrect.
-- Reply only in this format: "Correct" or "Incorrect: <short explanation>".
-- Be very brief.
-"""
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    result_text = response.choices[0].message.content
-    return jsonify({"feedback": result_text})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
