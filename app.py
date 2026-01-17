@@ -45,7 +45,6 @@ def analyze():
             return jsonify({"error": f"PDF processing failed: {str(e)}"}), 500
 
     elif "image_url" in data:
-        # placeholder for image analysis text extraction
         content_text = "Extracted text from image placeholder"
 
     if not content_text.strip():
@@ -72,7 +71,7 @@ CONTENT:
 
     ai_text = response.choices[0].message.content
 
-    # Simple parsing: split into sections
+    # -------------------- Parse AI response --------------------
     sections = {"important": "", "ignore": "", "questions": ""}
     current = None
     for line in ai_text.split("\n"):
