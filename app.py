@@ -1,15 +1,11 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import requests
-import io
-import os
+import requests, io, os
 from pypdf import PdfReader
 from openai import OpenAI
-import re
 
 app = Flask(__name__)
 CORS(app)
-
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 @app.route("/", methods=["GET"])
@@ -34,32 +30,28 @@ def analyze():
                 text = page.extract_text()
                 if text:
                     content_text += text + "\n"
-
         except Exception as e:
             return jsonify({"error": f"PDF processing failed: {str(e)}"}), 500
-
     elif "image_url" in data:
         content_text = "Extracted text from image placeholder"
 
     if not content_text.strip():
         return jsonify({"error": "No readable content"}), 400
 
-    # AI prompt
     prompt = f"""
 You are a strict study AI.
 
 Rules:
-1️⃣ Pick max 3 topics to study from the content and list them under 'Important Topics'.
-2️⃣ Clearly mention 2-3 topics to ignore under 'Topics to Ignore'.
-3️⃣ Create 2-3 clear questions based on the content separately under 'Questions'.
-4️⃣ Provide output in JSON format only like this:
-
+1️⃣ Pick **max 3 important topics** from the content and clearly mark them as 'important'.
+2️⃣ Clearly mention topics to ignore as 'ignore'.
+3️⃣ Create 2-3 clear questions based on the content.
+4️⃣ Respond ONLY in JSON format exactly like this:
 {{
   "topics": {{
-    "important": ["topic1", "topic2", "topic3"],
-    "ignore": ["ignore1", "ignore2"]
+    "important": ["..."],
+    "ignore": ["..."]
   }},
-  "questions": ["question1", "question2", "question3"]
+  "questions": ["question1","question2","question3"]
 }}
 
 CONTENT:
@@ -73,26 +65,14 @@ CONTENT:
 
     ai_text = response.choices[0].message.content
 
-    # Simple parsing: split Important/Ignore topics and Questions
-    topics_match = re.findall(r"(Important Topics|Topics to Ignore):\s*(.*)", ai_text, re.IGNORECASE)
-    questions_match = re.findall(r"Questions:\s*(.*)", ai_text, re.IGNORECASE|re.DOTALL)
+    try:
+        import json
+        json_data = json.loads(ai_text)  # Parse AI response as JSON
+    except:
+        return jsonify({"error": "AI did not return valid JSON", "raw": ai_text}), 500
 
-    topics_text = ""
-    for t in topics_match:
-        topics_text += f"{t[0]}: {t[1]}\n"
+    return jsonify(json_data)
 
-    questions_list = []
-    if questions_match:
-        qs = questions_match[0]
-        # split numbered questions
-        questions_list = re.findall(r"\d+\.\s*(.*)", qs)
-
-    return jsonify({
-        "result": {
-            "topics": topics_text.strip(),
-            "questions": questions_list
-        }
-    })
 
 @app.route("/check_answer", methods=["POST"])
 def check_answer():
@@ -122,6 +102,7 @@ Rules:
 
     result_text = response.choices[0].message.content
     return jsonify({"feedback": result_text})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
