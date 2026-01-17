@@ -20,7 +20,7 @@ def home():
     return "Backend is live"
 
 # --------------------
-# Analyze PDF
+# Analyze PDF / Image
 # --------------------
 @app.route("/analyze", methods=["POST"])
 def analyze():
@@ -30,6 +30,7 @@ def analyze():
 
     content_text = ""
 
+    # ---------- PDF ----------
     if "file_url" in data:
         try:
             r = requests.get(data["file_url"], timeout=20)
@@ -39,11 +40,37 @@ def analyze():
                 if text:
                     content_text += text + "\n"
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": f"PDF error: {str(e)}"}), 500
 
-    if not content_text.strip():
+    # ---------- IMAGE (NEW) ----------
+    elif "image_url" in data:
+        try:
+            vision_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Extract all readable study-related text from this image."},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": data["image_url"]}
+                            }
+                        ]
+                    }
+                ]
+            )
+
+            content_text = vision_response.choices[0].message.content
+
+        except Exception as e:
+            return jsonify({"error": f"Image error: {str(e)}"}), 500
+
+    # ---------- NO CONTENT ----------
+    if not content_text or not content_text.strip():
         return jsonify({"error": "No readable content"}), 400
 
+    # ---------- AI ANALYSIS ----------
     prompt = f"""
 You are a strict study AI.
 
@@ -59,8 +86,8 @@ Do not add extra text.
 Rules:
 - important_topics and ignore_topics MUST NOT be empty
 - Be specific
-- No placeholders like **
-- Use plain text only
+- No placeholders
+- Plain text only
 
 CONTENT:
 {content_text[:12000]}
@@ -87,7 +114,7 @@ CONTENT:
     })
 
 # --------------------
-# Check Answer (FIXED)
+# Check Answer
 # --------------------
 @app.route("/check_answer", methods=["POST"])
 def check_answer():
@@ -108,9 +135,9 @@ Student Answer:
 {answer}
 
 Rules:
-- If correct → reply: Correct
-- If incorrect → reply: Incorrect: <short reason>
-- Be very brief
+- If correct → Correct
+- If incorrect → Incorrect: short reason
+- Be brief
 """
 
     try:
